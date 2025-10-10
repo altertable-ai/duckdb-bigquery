@@ -1,3 +1,6 @@
+> **IMPORTANT**:
+> This extension is a fork of the community [DuckDB BigQuery](https://github.com/hafenkran/duckdb-bigquery) extension. It is not meant at being deployed to the community extension repository but aimed at being used for internal purposes.
+
 # DuckDB BigQuery Extension
 
 This community extension allows [DuckDB](https://duckdb.org) to query data from Google BigQuery using a mix of BigQuery Storage (Read/Write) and REST API. It enables users to access, manage, and manipulate their BigQuery datasets/tables directly from DuckDB using standard SQL queries. Inspired by official DuckDB RDBMS extensions like [MySQL](https://duckdb.org/docs/extensions/mysql.html), [PostgreSQL](https://github.com/duckdb/postgres_scanner), and [SQLite](https://github.com/duckdb/sqlite_scanner), this extension offers a similar feel. See [Important Notes](#important-notes-on-using-google-bigquery) for disclaimers and usage information.
