@@ -1,3 +1,6 @@
+> **IMPORTANT**:
+> This extension is a fork of the community [DuckDB BigQuery](https://github.com/hafenkran/duckdb-bigquery) extension. It is not meant at being deployed to the community extension repository but aimed at being used for internal purposes.
+
 # DuckDB BigQuery Extension
 
 This community extension allows [DuckDB](https://duckdb.org) to query data from Google BigQuery using a mix of BigQuery Storage (Read/Write) and REST API. It enables users to access, manage, and manipulate their BigQuery datasets/tables directly from DuckDB using standard SQL queries. Inspired by official DuckDB RDBMS extensions like [MySQL](https://duckdb.org/docs/extensions/mysql.html), [PostgreSQL](https://github.com/duckdb/postgres_scanner), and [SQLite](https://github.com/duckdb/sqlite_scanner), this extension offers a similar feel. See [Important Notes](#important-notes-on-using-google-bigquery) for disclaimers and usage information.
@@ -528,11 +531,7 @@ docker run \
 
 ## Testing
 
-The extension includes two test suites designed for different testing scenarios:
-
-### Testing Against Real BigQuery
-
-The `test/sql/bigquery/` directory contains tests that run against a real Google BigQuery project. These tests verify the extension's behavior with the actual BigQuery API.
+The `test/sql/` directory contains tests that run against a real Google BigQuery project. These tests verify the extension's behavior with the actual BigQuery API.
 
 **Prerequisites:**
 
@@ -562,34 +561,6 @@ BQ_TEST_DATASET=your-dataset \
 - `BQ_TEST_PROJECT`: Your Google Cloud project ID
 - `BQ_TEST_DATASET`: A test dataset in your project (will be used for read/write operations)
 - `BQ_SERVICE_ACCOUNT_JSON`: Full JSON content for secret authentication tests
-
-### Testing Against BigQuery Emulator
-
-The `test/sql/local/` directory contains tests that run against the [BigQuery Emulator](https://github.com/goccy/bigquery-emulator), a local BigQuery-compatible server. These tests are ideal for CI/CD pipelines and development without incurring BigQuery costs.
-
-```bash
-# Start the emulator
-./bigquery-emulator --project=test --dataset=dataset1
-```
-
-**Running Emulator Tests:**
-
-```bash
-BQ_API_ENDPOINT=0.0.0.0:9050 \
-BQ_GRPC_ENDPOINT=0.0.0.0:9060 \
-./build/release/test/unittest 'test/sql/local/*.test'
-
-# Run a specific local test
-BQ_API_ENDPOINT=0.0.0.0:9050 \
-BQ_GRPC_ENDPOINT=0.0.0.0:9060 \
-./build/release/test/unittest 'test/sql/local/attach_insert_table.test'
-```
-
-**Limitations:**
-
-- The emulator may not support all BigQuery features
-- Some advanced SQL functions might behave differently
-- Performance characteristics will differ from production BigQuery
 
 ## Important Notes on Using Google BigQuery
 
