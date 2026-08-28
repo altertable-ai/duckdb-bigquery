@@ -5,7 +5,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-No user-facing changes have been recorded since v0.12.0.
+### Security
+
+- Rejected `external_account_json` and `external_account_path` DuckDB secrets.
+  Caller-controlled Workload Identity Federation configs can fetch arbitrary
+  URLs from the DuckDB host.
 
 ## [0.12.0] - 2026-07-22 ([compare][0.12.0 diff])
 

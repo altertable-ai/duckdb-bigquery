@@ -4,7 +4,6 @@
 
 #include "google/cloud/internal/oauth2_access_token_credentials.h"
 #include "google/cloud/internal/oauth2_authorized_user_credentials.h"
-#include "google/cloud/internal/oauth2_external_account_credentials.h"
 #include "google/cloud/internal/oauth2_service_account_credentials.h"
 
 #include <filesystem>
@@ -61,6 +60,13 @@ void ValidateRequiredAuthorizedUserField(const string &param, bool is_set, const
     if (value.empty()) {
         throw InvalidInputException("BigQuery authorized_user secret parameter '" + param + "' must not be empty");
     }
+}
+
+[[noreturn]] void RejectExternalAccountCredentials() {
+    throw InvalidInputException(
+        "External account credentials (Workload Identity Federation) are not allowed. "
+        "Use 'access_token', 'service_account_path', 'service_account_json', or "
+        "'refresh_token' + 'client_id' + 'client_secret'");
 }
 
 void ValidateAuthorizedUserCredentialsJson(const string &value) {
@@ -218,39 +224,23 @@ static string ReadJsonFile(const string &param, const string &file_path, const s
 }
 
 void ValidateCredentialInput(const string &param, const string &value) {
-    bool is_service_account = (param == kServiceAccountJson || param == kServiceAccountPath);
-    bool is_path = (param == kServiceAccountPath || param == kExternalAccountPath);
+    bool is_path = (param == kServiceAccountPath);
 
     string json_content = value;
     if (is_path) {
-        string example_path = is_service_account ? "/path/to/key.json" : "/path/to/credentials.json";
-        json_content = ReadJsonFile(param, value, example_path);
+        json_content = ReadJsonFile(param, value, "/path/to/key.json");
     }
 
-    if (is_service_account) {
-        auto result = oauth2::ParseServiceAccountCredentials(json_content, "duckdb_secret");
-        if (result.ok()) return;
-
-        if (is_path) {
-            string err = "The '" + param + "' parameter points to a file with invalid service account JSON.";
-            throw InvalidInputException(err);
-        } else {
-            string err = "The '" + param + "' parameter must be valid JSON content for service account credentials.";
-            throw InvalidInputException(err);
-        }
-    } else {
-        auto result = oauth2::ParseExternalAccountConfiguration(json_content, google::cloud::internal::ErrorContext{});
-        if (result.ok()) return;
-
-        if (is_path) {
-            string err =
-                "The '" + param + "' parameter points to a file with invalid external account JSON: '" + value + "'";
-            throw InvalidInputException(err);
-        } else {
-            string err = "The '" + param + "' parameter must be valid JSON content for external account credentials.";
-            throw InvalidInputException(err);
-        }
+    auto result = oauth2::ParseServiceAccountCredentials(json_content, "duckdb_secret");
+    if (result.ok()) {
+        return;
     }
+
+    if (is_path) {
+        throw InvalidInputException("The '" + param + "' parameter points to a file with invalid service account JSON.");
+    }
+    throw InvalidInputException("The '" + param +
+                                "' parameter must be valid JSON content for service account credentials.");
 }
 
 std::shared_ptr<google::cloud::Credentials> CreateGCPCredentialsFromSecret(const BigquerySecret &secret,
@@ -277,21 +267,8 @@ std::shared_ptr<google::cloud::Credentials> CreateGCPCredentialsFromSecret(const
         return google::cloud::MakeServiceAccountCredentials(service_account_json, auth_options);
     }
 
-    auto external_account_path = secret.GetExternalAccountCredsPath();
-    if (!external_account_path.empty()) {
-        std::ifstream json_file(external_account_path);
-        if (!json_file.is_open()) {
-            std::cerr << "Failed to open external account credentials file: " << external_account_path << std::endl;
-            return nullptr;
-        }
-        std::string json_content((std::istreambuf_iterator<char>(json_file)), std::istreambuf_iterator<char>());
-        json_file.close();
-        return google::cloud::MakeExternalAccountCredentials(json_content, auth_options);
-    }
-
-    auto external_account_json = secret.GetExternalAccountCredsJson();
-    if (!external_account_json.empty()) {
-        return google::cloud::MakeExternalAccountCredentials(external_account_json, auth_options);
+    if (!secret.GetExternalAccountCredsPath().empty() || !secret.GetExternalAccountCredsJson().empty()) {
+        RejectExternalAccountCredentials();
     }
 
     auto refresh_token = secret.GetRefreshToken();
@@ -332,12 +309,13 @@ SecretMatch LookupBigquerySecret(ClientContext &context, const string &project_i
 unique_ptr<BaseSecret> CreateBigquerySecretFunction(ClientContext &context, CreateSecretInput &input) {
     auto bigquery_secret = make_uniq<BigquerySecret>(input.scope, input.provider, input.name);
 
+    if (bigquery_secret->TrySetValue(kExternalAccountJson, input) ||
+        bigquery_secret->TrySetValue(kExternalAccountPath, input)) {
+        RejectExternalAccountCredentials();
+    }
+
     int auth_methods_count = 0;
-    vector<string> auth_methods = {kAccessToken,
-                                   kServiceAccountPath,
-                                   kServiceAccountJson,
-                                   kExternalAccountPath,
-                                   kExternalAccountJson};
+    vector<string> auth_methods = {kAccessToken, kServiceAccountPath, kServiceAccountJson};
 
     for (const auto &method : auth_methods) {
         if (bigquery_secret->TrySetValue(method, input)) {
@@ -357,13 +335,12 @@ unique_ptr<BaseSecret> CreateBigquerySecretFunction(ClientContext &context, Crea
     if (auth_methods_count == 0) {
         throw InvalidInputException( //
             "BigQuery secret must contain one of: 'access_token', 'service_account_path', "
-            "'service_account_json', 'external_account_path', 'external_account_json', or "
-            "'refresh_token' + 'client_id' + 'client_secret'");
+            "'service_account_json', or 'refresh_token' + 'client_id' + 'client_secret'");
     } else if (auth_methods_count > 1) {
         throw InvalidInputException( //
             "BigQuery secret must contain exactly one authentication method. Please provide "
-            "only one of: 'access_token', 'service_account_path', 'service_account_json', 'external_account_path', "
-            "'external_account_json', or 'refresh_token' + 'client_id' + 'client_secret'");
+            "only one of: 'access_token', 'service_account_path', 'service_account_json', "
+            "or 'refresh_token' + 'client_id' + 'client_secret'");
     }
 
     if (has_authorized_user) {
@@ -392,16 +369,6 @@ unique_ptr<BaseSecret> CreateBigquerySecretFunction(ClientContext &context, Crea
     auto service_account_path = bigquery_secret->GetServiceAccountKeyPath();
     if (!service_account_path.empty()) {
         ValidateCredentialInput(kServiceAccountPath, service_account_path);
-    }
-
-    auto external_account_json = bigquery_secret->GetExternalAccountCredsJson();
-    if (!external_account_json.empty()) {
-        ValidateCredentialInput(kExternalAccountJson, external_account_json);
-    }
-
-    auto external_account_path = bigquery_secret->GetExternalAccountCredsPath();
-    if (!external_account_path.empty()) {
-        ValidateCredentialInput(kExternalAccountPath, external_account_path);
     }
 
     return std::move(bigquery_secret);

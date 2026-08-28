@@ -84,13 +84,14 @@ The following authentication parameters are currently supported:
   `gcloud auth print-access-token`.
 - **`SERVICE_ACCOUNT_PATH`** — Path to a service-account key file.
 - **`SERVICE_ACCOUNT_JSON`** — Inline JSON content of a service-account key.
-- **`EXTERNAL_ACCOUNT_PATH`** — Path to an external-account credential file
-  for Workload Identity Federation.
-- **`EXTERNAL_ACCOUNT_JSON`** — Inline external-account JSON for Workload
-  Identity Federation.
 - **`REFRESH_TOKEN` + `CLIENT_ID` + `CLIENT_SECRET`** — OAuth authorized-user
   credentials. `TOKEN_URI` is optional and defaults to Google's OAuth token
   endpoint.
+
+`EXTERNAL_ACCOUNT_JSON` and `EXTERNAL_ACCOUNT_PATH` (Workload Identity
+Federation) are rejected. Those configs can instruct the client to fetch
+caller-chosen URLs from the DuckDB host. Use Application Default Credentials
+on the host if the workload itself is federated.
 
 Use `bq://PROJECT_ID` or `bigquery://PROJECT_ID` as the scope. The following
 examples show the supported credential forms:
@@ -129,31 +130,14 @@ examples show the supported credential forms:
     └─────────┘
     ```
 
-=== "External-account file"
+=== "Service-account file"
 
     ```sql
-    -- Create a persistent secret backed by an external-account file.
-    CREATE PERSISTENT SECRET bigquery_external_account (
+    -- Create a persistent secret backed by a service-account key file.
+    CREATE PERSISTENT SECRET bigquery_service_account (
         TYPE bigquery,
         SCOPE 'bq://my-gcp-project',
-        EXTERNAL_ACCOUNT_PATH '/path/to/external-account.json'
-    );
-    ┌─────────┐
-    │ Success │
-    │ boolean │
-    ├─────────┤
-    │ true    │
-    └─────────┘
-    ```
-
-=== "External-account JSON"
-
-    ```sql
-    -- Create a process-local secret with inline external-account JSON.
-    CREATE SECRET bigquery_external_account_json (
-        TYPE bigquery,
-        SCOPE 'bq://my-gcp-project',
-        EXTERNAL_ACCOUNT_JSON '{"type":"external_account", "...":"..."}'
+        SERVICE_ACCOUNT_PATH '/path/to/key.json'
     );
     ┌─────────┐
     │ Success │
@@ -188,7 +172,7 @@ credential changes or expires.
 
 Add `PERSISTENT` when DuckDB should load the credential again in later
 sessions. Use `CREATE PERSISTENT SECRET` for a new persistent credential and
-`CREATE OR REPLACE PERSISTENT SECRET` to update it. The external-account file
+`CREATE OR REPLACE PERSISTENT SECRET` to update it. The service-account file
 example above demonstrates the persistent form.
 
 Persistent secrets are stored in unencrypted binary form under
