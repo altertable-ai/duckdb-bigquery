@@ -22,6 +22,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Reported Storage Write API stream errors and missing commit confirmations as
   INSERT/CTAS failures, and prevented repeated gRPC shutdown during error cleanup.
 
+### Security
+
+- Rejected `external_account_json` and `external_account_path` DuckDB secrets.
+  Caller-controlled Workload Identity Federation configs can fetch arbitrary
+  URLs from the DuckDB host.
+
 ## [0.13.0] - 2026-10-21 ([compare][0.13.0 diff])
 
 ### Changed
